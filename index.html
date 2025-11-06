@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blue Prince Exam Simulator</title>
+<style>
+  :root{
+    --bg:#B4B6AC;
+    --text:#0F0F0F;
+    --muted:#202020;
+    --ring:#0F0F0F;
+  }
+  html,body{background:var(--bg); color:var(--text); margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial;}
+  .wrap{max-width:900px; margin:0 auto; padding:24px;}
+  .center{display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:70vh; text-align:center; gap:16px;}
+  h1{margin:0; font-size:40px;}
+  h2{margin:0; font-size:20px; font-weight:600;}
+  .row{margin:8px 0;}
+  .hidden{display:none !important;}
+  .timer{font-weight:700;}
+  button{font:inherit}
+
+  .q{margin:18px 0;}
+  .qline{font-size:18px; margin-bottom:10px;}
+  .qimg{display:block; max-width:100%; max-height:320px; height:auto; margin-top:6px; object-fit:contain;}
+  .opt .qimg{max-width:75px; max-height:75px; height:auto; object-fit:contain;}
+  /* Smaller question images for Q34–Q39 */
+  #q34 .qimg, #q35 .qimg, #q36 .qimg, #q37 .qimg, #q38 .qimg, #q39 .qimg{
+    height:100px;
+  }
+
+  .opts{display:grid; gap:10px; margin:0; padding:0; list-style:none;}
+  .opts.vertical{grid-template-columns:1fr;}
+  .opts.horizontal{grid-template-columns:repeat(4,minmax(0,1fr));}
+  .opts.twoby2{grid-template-columns:repeat(2,minmax(0,1fr));}
+
+  .opt{display:flex; align-items:center; gap:10px;}
+
+  .bubble{
+    position:relative; display:inline-block; width:28px; height:28px;
+    border:2px solid var(--ring); border-radius:9999px;
+  }
+  .bubble input{
+    position:absolute; inset:0; opacity:0; cursor:pointer;
+  }
+  .bubble .inset{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-weight:700; user-select:none; pointer-events:none;
+  }
+  .bubble.on{box-shadow:inset 0 0 0 3px rgba(15,15,15,.25);}
+  .tag{min-width:2.2em; display:inline-block; user-select:none;}
+
+  .colored-num{font-weight:800; font-size:1.2em; padding:0 .08em;}
+  .blue{color:#2563eb;}
+  .dark-yellow{color:#b8860b;}
+  .pink{color:#db2777;}
+  .purple{color:#7c3aed;}
+
+  table.results{width:100%; border-collapse:collapse; margin-top:10px;}
+  table.results th, table.results td{border-bottom:1px solid rgba(0,0,0,.25); padding:8px 4px; text-align:left;}
+</style>
+</head>
+<body>
+
+<div id="start" class="wrap center">
+  <div>
+    <h1>Blue Prince</h1>
+    <h2>Mount Holly Elementary</h2>
+    <h2>Final Exam</h2>
+  </div>
+  <label class="row">
+    <input type="checkbox" id="useTimer"> Use timer
+  </label>
+  <button id="startBtn">Start</button>
+</div>
+
+<div id="exam" class="wrap hidden">
+  <div id="toprow" class="row hidden">Time: <span id="timer" class="timer">30:00</span></div>
+  <div id="questions"></div>
+  <div class="row">
+    <button id="submitBtn">Submit</button>
+  </div>
+</div>
+
+<div id="results" class="wrap hidden">
+  <h2>Results</h2>
+  <table class="results">
+    <thead><tr><th>Category</th><th>Percent</th></tr></thead>
+    <tbody id="catRows"></tbody>
+  </table>
+</div>
+
+<script>
+function escapeHtml(s){return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function renderRich(text){
+  let t = text;
+  t = t.replace(/\*(.+?)\*/g, (_,inner) => `<strong>${inner}</strong>`);
+  t = t.replace(/\[([^\]]+)\]\s*([0-9]+)/gi, (_, colorName, num) => {
+    const cls = colorName.trim().toLowerCase().replace(/\s+/g,'-');
+    return `<span class="colored-num ${cls}">${num}</span>`;
+  });
+  return t;
+}
+
+const questions = [
+  {id:1,  text:`Sam left his house at 6 am and drove five hours west and passed 8 flags. He then turned north at Tanner Fork and drove two hours north and passed 4 flags of the same color before arriving at Trinsdale at noon. What color were the flags?`, options:["WHITE","BLACK","RED","YELLOW"]},
+  {id:2,  text:`In the scenario above, where does Sam live?`, options:["ORIS","THE GRAND CITY OF FENN","ARCH ARIES","ERAJA"]},
+  {id:3,  text:`What color is most often associated with Hallways?`, options:["VIOLET","RED","WHITE","ORANGE"]},
+  {id:4,  text:`Which of the following would be the least patriotic room pairing?`, options:["A CHAPEL IN FENN ARIES","A SHOP IN ARCH ARIES","A GREENHOUSE IN CORARICA","A BEDROOM IN ERAJA"]},
+  {id:5,  text:`What color is the fruit that gives you +3 steps when consumed?`, options:["YELLOW","ORANGE","RED OR GREEN","ONLY GREEN"]},
+  {id:6,  text:`Solve the following problem: [blue]5 [dark yellow]5 [pink]2`, options:["0","12","20","27"]},
+  {id:7,  text:`Solve the following problem: [blue]5 [pink]2 [blue]2 [pink]2`, options:["2","12","22","24"]},
+  {id:8,  text:`Solve the following problem: [blue]5 [dark yellow]2 [pink]5 [blue]1 [dark yellow]5`, options:["1","11","16","47"]},
+  {id:9,  text:`Solve the following problem: [blue]10 [pink]4 [blue]5 [dark yellow]4`, options:["0","4","16","31"]},
+  {id:10, text:`Solve the following problem: [blue]1 [dark yellow]4 [pink]2 [blue]7`, options:["-1","1","13","17"]},
+  {id:11, text:`Solve the following problem: [blue]3 [dark yellow]4 [pink]8 [purple]2 [blue]5`, options:["-4","1","20","53"]},
+  {id:12, text:`Which element on the periodic table is represented by the symbol *C*?`, options:["CARBON","CALCIUM","COPPER","CHLORINE"]},
+  {id:13, text:`Which element appears in the periodic table directly below Helium (He)?`, options:["H","Ne","Ti","O"]},
+  {id:14, text:`Which of the following is not a real element found on the periodic table?`, options:["Mt","Ho","Ll","Y"]},
+  {id:15, text:`Which element on the periodic table is represented by the symbol *Ag*?`, options:["ARGON","ALUMINUM","SILVER","OXYGEN"]},
+  {id:16, text:`Which element could not be used in the spelling of the word *CLUES*?`, options:["URANIUM","CARBON","RADON","CHLORINE"]},
+  {id:17, text:`How many elements are on the top row of the periodic table?`, options:["1","2","4","8"]},
+  {id:18, text:`The city of Fenn is south of which small body of water?`, options:["TRINSDALE LAKE","SEA OF ARIES","MORNING BAY","CORA COVE"]},
+  {id:19, text:`How many cities in Fenn Aries are larger than Reddington?`, options:["2","4","5","7"]},
+  {id:20, text:`Which of the following realms is not near Fenn Aries?`, options:["ARCH ARIES","ERAJA","NUANCE","CORARICA"]},
+  {id:21, text:`Which sigil core denotes the realm of Arch Aries?`, optionsImg:["public/21a.png","public/21b.png","public/21c.png","public/21d.png"], twoRow:true},
+  {id:22, text:`What Realm is directly north of Eraja?`, options:["CORARICA","MORA JAI","FENN ARIES","No realm is north of Eraja"]},
+  {id:23, text:`Where are you right now as you take this exam?`, options:["MT. HOLLY, ORIS, ORINDA ARIES","MT. HOLLY, REDDINGTON, FENN ARIES","MT. HOLLY, ORIS, REDDINGTON","FEATHERFALL KEEP, ORIS, FENN ARIES"]},
+  {id:24, text:`Which two pieces of art would be best paired to depict the letter "B"?`, options:[`"BIRCH TREE" & "OAK TREE"`,`"HAY BALE" & "MUG OF ALE"`,`"BIRDS" & "A BOOKSTORE"`,`"WINGS" & "HONEY"`]},
+  {id:25, text:`Which of the following pieces of art was not displayed in the Grade 5 Classroom?`, options:[`"PRY"`,`"FLAN"`,`"BRIDE"`,`"JUNGLE"`]},
+  {id:26, text:`Which of the following pieces of art is not displayed in Mt. Holly's Entrance Hall?`, options:[`"FACE"`,`"TRINSDALE"`,`"REALIZE"`,`"ACE"`]},
+  {id:27, text:`Can you find the difference? <br><img src="public/27.png" class="qimg" alt="Question 27 image">`, options:["B","I","M","R"], horizontal:true},
+  {id:28, text:`Who was the first crowned ruler of Fenn Aries?`, options:["PRINCE LEERSON","GENERAL TESKIN","DESILETS III","DESILETS IV"]},
+  {id:29, text:`In which era were the railways of Fenn Aries destroyed?`, options:["AJERA","SECOND ERA","THIRD ERA","SIXTH ERA"]},
+  {id:30, text:`How long did the "War of the Fifth Era" last?`, options:["SIX YEARS","TWELVE YEARS","TWENTY-TWO YEARS","THE ENTIRE FIFTH ERA"]},
+  {id:31, text:`What was the first capital city of Fenn Aries?`, options:["GRAND CITY OF FENN","ORIS","REDDINGTON","DREMM"]},
+  {id:32, text:`Which realm gifted Fenn Aries a dirigible to headway their victory parade at the conclusion of the war?`, options:["ORINDA ARIES","ARCH ARIES","CORARICA","NUANCE"]},
+  {id:33, text:`The deciding battle of the War of the Fifth Era was fought near what famous landmark in 1836?`, options:["ROYAL MUSEUM OF FENN","ANGEL TOWER","COLOSSUS ORINDA","MOUNT HOLLY"]},
+  {id:34, text:`<img src="public/34.png" class="qimg" alt="Question 34 image">`, options:["3","12","24","36"], horizontal:true},
+  {id:35, text:`<img src="public/35.png" class="qimg" alt="Question 35 image">`, options:["-36","-12","-6","6"], horizontal:true},
+  {id:36, text:`<img src="public/36.png" class="qimg" alt="Question 36 image">`, options:["12","21","24","144"], horizontal:true},
+  {id:37, text:`<img src="public/37.png" class="qimg" alt="Question 37 image">`, options:["3","4","5","8"], horizontal:true},
+  {id:38, text:`<img src="public/38.png" class="qimg" alt="Question 38 image">`, options:["14","39","41","1681"], horizontal:true},
+  {id:39, text:`<img src="public/39.png" class="qimg" alt="Question 39 image">`, options:["0","100","140","200"], horizontal:true},
+  {id:40, text:`What is the Erajan word for House?`, options:["AJHOUS","EJ","HEW","AREI"]},
+  {id:41, text:`What does "NEVYAIT" mean in Erajan?`, options:["THE FUTURE","NEW GATE","COME TOWARDS ME","OLD WORLD"]},
+  {id:42, text:`The phrase "Treivenle" can be translated in several different ways. Which of the following is NOT an acceptable interpretation of this phrase?`, options:[
+    "That old tree is not owned by me.",
+    "My tree is not very old.",
+    "I can not see the tree trunk.",
+    "I am not an old tree."
+  ]},
+  {id:43, text:`How would you say the following phrase in Erajan, "You have a very, very long name."`, options:["DAUVENJA","ULRAAJORAM","NAI DAU","LORLU RAADAU"]},
+  {id:44, text:`How would you tell an Erajan "Count me out."`, options:["ERAJA NAI","ELCOUNTVO","LEAVELU?","LE"]},
+  {id:45, text:`Using the provided Erajan terms for cardinal directions above, what would be the clearest way you could give directions to someone at point A to get them to point B.`, options:[
+    "INN ETT ISS",
+    "ETT TREI",
+    "AJINN ETT OVTREI ISSJA TREIVO",
+    "MAINN ETTAM MATREI ETTISS MAORR"
+  ]},
+  {id:46, text:`In ancient Orindia, the Number 8 was considered by Ajeran scholars to be mathematically "near-perfect". Though many in the secular sphere held that only this advanced form of 8 was worthy of numerical perfection.`, optionsImg:["public/46a.png","public/46b.png","public/46c.png","public/46d.png"], twoRow:true},
+];
+
+const correct = [
+'C','A','D','C','A','A','D','B','B','B',
+'B','A','B','C','C','C','B','C','A','D',
+'A','C','B','B','D','C','B','B','D','C',
+'A','D','C','D','D','B','B','A','D','C',
+'B','B','B','D','C','D'
+];
+
+const categories = [
+  { key:'COLOR',     qs:[1,3,4,5] },
+  { key:'MATH',      qs:[6,7,8,9,10,11] },
+  { key:'SCIENCE',   qs:[12,13,14,15,16,17] },
+  { key:'GEOGRAPHY', qs:[2,18,19,20,21,22,23] },
+  { key:'ART',       qs:[24,25,26,27] },
+  { key:'HISTORY',   qs:[28,29,30,31,32,33] },
+  { key:'ALGEBRA',   qs:[34,35,36,37,38,39,46] },
+  { key:'ERAJAN',    qs:[40,41,42,43,44,45] },
+];
+
+const qRoot = document.getElementById('questions');
+
+function makeBubble(letter, name){
+  const wrap = document.createElement('span');
+  wrap.className = 'bubble';
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = name;
+  input.value = letter;
+  const inset = document.createElement('span');
+  inset.className = 'inset';
+  inset.textContent = letter;
+  wrap.appendChild(input);
+  wrap.appendChild(inset);
+  input.addEventListener('change', ()=>{
+    document.querySelectorAll(`input[name="${name}"]`).forEach(i=>{
+      i.parentElement.classList.remove('on');
+    });
+    if(input.checked) wrap.classList.add('on');
+  });
+  return wrap;
+}
+
+function renderExam(){
+  qRoot.innerHTML = '';
+  questions.forEach(q=>{
+    const block = document.createElement('div');
+    block.className = 'q';
+    block.id = `q${q.id}`;
+
+    const qline = document.createElement('div');
+    qline.className = 'qline';
+
+    // Extract any inline <img> tags from question text and render them after the question line
+    const raw = String(q.text);
+    const imgData = [];
+    const imgRe = /<img\s+[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>/gi;
+    let cleaned = raw.replace(imgRe, (_m, src, alt) => { imgData.push({src, alt}); return ''; });
+    cleaned = cleaned.replace(/<br\s*\/?>/gi, '').trim();
+
+    qline.innerHTML = `${q.id}. ${renderRich(cleaned)}`;
+    block.appendChild(qline);
+
+    // Append extracted images below the question text
+    imgData.forEach(d => {
+      const img = document.createElement('img');
+      img.src = d.src; img.alt = d.alt || `Q${q.id} image`;
+      img.className = 'qimg';
+      block.appendChild(img);
+    });
+
+    const ul = document.createElement('ul');
+    ul.className = 'opts';
+    if(q.horizontal) ul.classList.add('horizontal');
+    else if(q.twoRow) ul.classList.add('twoby2');
+    else ul.classList.add('vertical');
+
+    const letters=['A','B','C','D'];
+    const add = (label, content, isImg=false) => {
+      const li = document.createElement('li');
+      li.className = 'opt';
+
+      li.appendChild(makeBubble(label, `q${q.id}`));
+
+      if(isImg){
+        const img=document.createElement('img'); img.src=content; img.alt=`Q${q.id} option ${label}`; img.className='qimg';
+        li.appendChild(img);
+      } else{
+        const span=document.createElement('span'); span.textContent = content; li.appendChild(span);
+      }
+      ul.appendChild(li);
+    };
+
+    if(q.optionsImg){
+      q.optionsImg.forEach((src,i)=>add(letters[i], src, true));
+    } else{
+      q.options.forEach((txt,i)=>add(letters[i], txt, false));
+    }
+
+    block.appendChild(ul);
+    qRoot.appendChild(block);
+  });
+}
+
+const startEl = document.getElementById('start');
+const examEl = document.getElementById('exam');
+const resultsEl = document.getElementById('results');
+const toprowEl = document.getElementById('toprow');
+const timerEl = document.getElementById('timer');
+
+let timerEnabled=false, remaining=30*60, tHandle=null;
+
+document.getElementById('startBtn').onclick = ()=>{
+  timerEnabled = document.getElementById('useTimer').checked;
+  renderExam();
+  startEl.classList.add('hidden');
+  examEl.classList.remove('hidden');
+  if(timerEnabled){
+    toprowEl.classList.remove('hidden');
+    remaining = 30*60;
+    timerEl.textContent = '30:00';
+    tHandle = setInterval(()=>{
+      remaining--;
+      if(remaining<=0){
+        clearInterval(tHandle);
+        timerEl.textContent='00:00';
+        return;
+      }
+      const mm=String(Math.floor(remaining/60)).padStart(2,'0');
+      const ss=String(remaining%60).padStart(2,'0');
+      timerEl.textContent = `${mm}:${ss}`;
+    },1000);
+  } else {
+    toprowEl.classList.add('hidden');
+  }
+};
+
+function submitExam(){
+  if(tHandle) clearInterval(tHandle);
+
+  const responses = {};
+  questions.forEach(q=>{
+    const sel = document.querySelector(`input[name="q${q.id}"]:checked`);
+    responses[q.id] = sel ? sel.value : null;
+  });
+
+  const summary = categories.map(cat=>{
+    let got=0;
+    cat.qs.forEach(qid=>{
+      const u = responses[qid];
+      const c = correct[qid-1];
+      if(u && u===c) got++;
+    });
+    const pct = Math.round((got/cat.qs.length)*100);
+    return {key:cat.key, pct};
+  });
+
+  const tbody = document.getElementById('catRows');
+  tbody.innerHTML='';
+  summary.forEach(s=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${s.key}</td><td>${s.pct}%</td>`;
+    tbody.appendChild(tr);
+  });
+
+  examEl.classList.add('hidden');
+  resultsEl.classList.remove('hidden');
+}
+
+document.getElementById('submitBtn').onclick = submitExam;
+document.addEventListener('keydown', (e)=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='enter'){ submitExam(); }
+});
+</script>
+</body>
+</html>
