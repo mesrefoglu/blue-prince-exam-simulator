@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mesrefoglu.github.io/blue-prince-exam-simulator/sitemap.xml
